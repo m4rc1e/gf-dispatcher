@@ -27,13 +27,16 @@ logger = logging.getLogger(__name__)
 
 
 class UpstreamRepo:
-    def __init__(self, url, fonts_dir, path, license_dir=None):
-        self.path = path
+    def __init__(self, url, fonts_dir, path=None, license_dir=None):
+        if path:
+            self.path = path
+        else:
+            self.path = tempfile.mkdtemp()
         self.url = url.replace('.git', '') if url.endswith('.git') else url
         if license_dir:
-            self.license =  self._get_license(self.url, license_dir)
+            self.license = self._get_license(self.url, license_dir)
         else:
-            self.license =  self._get_license(self.url)
+            self.license = self._get_license(self.url)
         self.families = self._get_family_fonts(self.url, fonts_dir)
         self.html_snippet = self._get_html_snippet(self.url)
         self.commit = self._get_commit(self.url)

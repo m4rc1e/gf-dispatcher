@@ -28,6 +28,7 @@ REPO_DIRS = {
     'LICENSE.txt': 'apache'
 }
 
+
 class Family(object):
     """Wrapper to manipulate individual font folders which reside in the
     Google Fonts repository"""
@@ -247,16 +248,8 @@ class GFRepo(object):
                 name, version, repo_url, upstream_commit)
             return msg
 
-    def pull_request(self, commit_msg, fb_report, diffbrowsers_report, images, path, gfr_url):
-        pr_images = self._get_images_for_pr(images)
-        img_zip_url = self._upload_img_dir(path)
-
-        text = self._pr_text(commit_msg, fb_report, diffbrowsers_report, pr_images, img_zip_url, gfr_url)
-        md_file = tempfile.NamedTemporaryFile('w', delete=False)
-        md_file.write(text)
-        md_file.close()
-        subprocess.call(['hub', 'pull-request', '-b', 'm4rc1e/fonts:master', '-F', md_file.name, '-f'])
-        md_file.unlink(md_file.name)
+    def pull_request(self, commit_msg):
+        subprocess.call(['hub', 'pull-request', '-b', 'm4rc1e/fonts:master', '-m', commit_msg, '-f'])
 
     def git_reset(self):
         c_dir = os.getcwd()
@@ -273,84 +266,3 @@ class GFRepo(object):
                     family_path = os.path.join(self.path, directory, family_dir)
                     families[family_dir] = Family(family_path)
         return families
-
-    def _pr_text(self, commit_msg, fb_report, diffbrowsers_report, images, img_zip_url, gfr_url):
-        """Generate text for the pull request"""
-        text = commit_msg
-        report_text = ("\n\n---\n## FontBakery Report:\n{}\n\n---\n"
-                       "## DiffBrowsers Report:\n```{}```\n\n").format(
-                       fb_report, diffbrowsers_report)
-        text = text + report_text
-        imgs = []
-        for path in images:
-            img_path = '![alt text]({} "Logo Title Text 1")'.format(path)
-            imgs.append(img_path)
-        text = text + '\n\n'.join(imgs)
-        text = text + '\n\n**Imgs**\n{}'.format(img_zip_url)
-        text = text + '\n\n**GFR**\n{}'.format(gfr_url)
-        return text
-
-    def _get_images_for_pr(self, img_paths):
-        """Select the gif images we need for the pull request.
-
-        We do not want to include all the images, this fatigues the reviewer.
-        If the review is skeptical, they can review all the images attached in the
-        .zip archive."""
-        desired = [
-            os.path.join('waterfall', 'gifs', 'Desktop_Windows_7_ie_9.0_.gif'),
-            os.path.join('glyphs-modified', 'gifs', 'Desktop_OS_X_El_Capitan_safari_9.1_.gif'),
-            os.path.join('glyphs-new', 'gifs', 'Desktop_OS_X_El_Capitan_safari_9.1_.gif'),
-            os.path.join('glyphs-missing', 'gifs', 'Desktop_OS_X_El_Capitan_safari_9.1_.gif'),
-            os.path.join('glyphs-all_26pt', 'gifs', 'Desktop_OS_X_El_Capitan_safari_9.1_.gif'),
-        ]
-        paths = []
-        for path in desired:
-            for master_path in img_paths:
-                if path in master_path:
-                    paths.append(master_path)
-        return self._post_images_to_imgur(paths)
-
-    def _post_images_to_imgur(self, paths):
-        """Post images to hosting service imgur."""
-        images = []
-        for path in paths:
-            r = requests.post('https://api.imgur.com/3/image',
-                data={'image': open(path, 'rb').read(), 'type': 'file'},
-                headers = {'Authorization': 'Client-ID {}'.format(SETTINGS['imgur_client_id'])}
-            )
-            images.append(r.json()['data']['link'])
-            time.sleep(1)
-        return images
-
-    def _upload_img_dir(self, img_dir):
-        """Zip a directory of images and upload them to Google Drive.
-        Returns a shareable Google Drive link."""
-        zipped = self._zip_dir(img_dir)
-        shareable_link = self._upload_to_drive(zipped)
-        return shareable_link
-
-    def _zip_dir(self, img_dir):
-        """Zip the contents of a directory and place the zip within the
-        parent dir"""
-        zip_path = os.path.join(os.path.dirname(img_dir), 'imgs')
-        archive = shutil.make_archive(zip_path, 'zip', img_dir)
-        shutil.move(zip_path+'.zip', img_dir)
-        zip_path = os.path.join(img_dir, 'imgs.zip')
-        return zip_path
-
-    def _upload_to_drive(self, f):
-        """Upload a file to Google Drive, return shareable link."""
-        gauth = GoogleAuth(settings_file=SETTINGS['drive_settings'])
-        gauth.LocalWebserverAuth()
-
-        drive = GoogleDrive(gauth)
-        upload_filename = basename(f)
-        file1 = drive.CreateFile({'title': upload_filename})
-
-        file1.SetContentFile(f)
-        file1.Upload()
-        permission = file1.InsertPermission({
-                        'type': 'anyone',
-                        'value': 'anyone',
-                        'role': 'reader'})
-        return file1['alternateLink']
